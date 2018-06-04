@@ -37,9 +37,10 @@ def schema(args):
         db_list = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     if args['--db_per_file'] or len(db_list) == 1:
         for db in db_list:
-            subprocess.call('mysqldump {} --no-data --force --quote-names --dump-date --opt --single-transaction --events --routines --triggers --databases {} --result-file={}/{}.sql'.format(' '.join(connect_list),db,args['--output_dir'],db), shell=True)
+            subprocess.call('mysqldump {} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt --single-transaction --events --routines --triggers --databases {} --result-file={}/{}.sql'.format(' '.join(connect_list),db,args['--output_dir'],db), shell=True)
+            print('Output File: {}/{}.sql'.format(args['--output_dir'],db))
     else:
-        subprocess.call('mysqldump {} --no-data --force --quote-names --dump-date --opt --single-transaction --events --routines --triggers --databases {} --result-file={}/{}.sql'.format(' '.join(connect_list),' '.join(db_list),args['--output_dir'],'alldb'), shell=True)
+        subprocess.call('mysqldump {} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt --single-transaction --events --routines --triggers --databases {} --result-file={}/{}.sql'.format(' '.join(connect_list),' '.join(db_list),args['--output_dir'],'alldb'), shell=True)
+        print('Output File: {}/{}.sql'.format(args['--output_dir'],'alldb'))
 
-    print('Complete!')
     return None
