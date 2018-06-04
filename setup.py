@@ -63,7 +63,7 @@ setup(
     version=VERSION,
     description='mysql schema dump toolkit',
     author='Allan',
-    author_email='allan_hung@trend.com.tw',
+    author_email='hung.allan@gmail.com',
     url='https://github.com/allanhung/pyxdump',
     download_url='https://github.com/allanhung/pyxdump/tarball/' + VERSION,
     keywords=['utility', 'miscellaneous', 'library'],
