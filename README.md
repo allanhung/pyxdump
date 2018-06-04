@@ -8,7 +8,6 @@ $ pip install git+https://github.com/allan-hung/pyxdump
 ```
     
 ## Example
-```
 ### dump
 ```sh
 $ pyxdump dump schema --user root --password dbpass
