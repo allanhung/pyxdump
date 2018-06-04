@@ -23,6 +23,7 @@ Options:
 
 from docopt import docopt
 import subprocess
+import os
 
 def schema(args):
     connect_list = []
@@ -30,11 +31,8 @@ def schema(args):
         connect_list.append('-u{}'.format(args['--user']))
     if args['--password']:
         connect_list.append('-p{}'.format(args['--password']))
-    rc = subprocess.call('mysql {} < {}'.format(' '.join(connect_list),script_file),shell=True)
-    if rc == 0:
-        print('Complete!')
-    else:
-        print('Error with rc code: {}'.format(rc))
+    rc = subprocess.call('mysql {} < {}'.format(' '.join(connect_list),args['--script_file']),shell=True)
+    print('import {} complete!'.format(args['--script_file']))
     return None
 
 def data(args):
@@ -64,12 +62,11 @@ def data(args):
         print('running sql script: {}'.format(sqlscript))
         subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
         print('copy table data: {}.{}'.format(schema, table))
-        subprocess.call('/bin/cp -f {}/{}/{}.{cfg.ibd.exp} {}/{}/'.format(args['--backupdir'],schmea,table,args['--datadir'],schema),shell=True)
+        subprocess.call('/bin/cp -f {}.{cfg.ibd.exp} {}/'.format(os.path.join(args['--backupdir'],schmea,table),os.path.join(args['--datadir'],schema)),shell=True)
         print('change file permission: {}.{}'.format(schema, table))
-        subprocess.call('chown {}.{} {}/{}/{}.{cfg.ibd.exp}'.format(args['mysql_os_user'],args['mysql_os_group'],args['--datadir'],schmea,table),shell=True)
+        subprocess.call('chown {}.{} {}.{cfg.ibd.exp}'.format(args['mysql_os_user'],args['mysql_os_group'],os.path.join(args['--datadir'],schmea,table)),shell=True)
         sqlscript="SET SESSION sql_log_bin=0; alter table {}.{} import tablespace;".format(schema, table)
         print('running sql script: {}'.format(sqlscript))
         subprocess.call('mysql {} -e {}'.format(' '.join(connect_list),sqlscript),shell=True)
-
     print('Complete!')
     return None
