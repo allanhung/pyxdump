@@ -5,7 +5,7 @@ mysql import schema and data
 
 Usage:
   pyxdump import schema [--user USER] [--password PASSWORD] [--script_file SCRIPTFILE]
-  pyxdump import data --backupdir BACKUPDIR --datadir DATADIR [--user USER] [--password PASSWORD] [--mysql_os_user OSUSER] [--mysql_os_group OSGROUP]  [--database DATABASE] [--exclude_database EXDB]
+  pyxdump import data --backupdir BACKUPDIR --datadir DATADIR [--user USER] [--password PASSWORD] [--mysql_os_user OSUSER] [--mysql_os_group OSGROUP]  [--database DATABASE] [--exclude_database EXDB] [--pxc]
 
 Arguments:
   --backupdir BACKUPDIR     database backup directory [default: /dbbackup]
@@ -18,6 +18,7 @@ Options:
   --mysql_os_group OSGROUP  os group for mysql [default: mysql]
   --database DATABASE       database list default export all database (example: db1,db2)
   --exclude_database EXDB   database exclude list (example: db3,db4)
+  --pxc                     If is Percona Xtra Cluster
   -h --help                 Show this screen.
 """
 
@@ -51,21 +52,22 @@ def data(args):
     if args['--database']:
         db_list = args['--database'].split(',')
     else:
-        sqlscript = 'SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('+excluse_str+')'
+        sqlscript = 'SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('+exclude_str+')'
         db_list = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
 
+    session_variable = 'SET pxc_strict_mode=DISABLED;' if args['--pxc'] else ''
     sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema in ('{}')".format("','".join(db_list))
     tables = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     for tb in tables:
         (schema, table) = tb.split('\t')
-        sqlscript="SET SESSION sql_log_bin=0; truncate table {}.{}; alter table {}.{} discard tablespace;".format(schema, table, schema, table)
+        sqlscript="SET SESSION sql_log_bin=0; {} truncate table {}.{}; alter table {}.{} discard tablespace;".format(session_variable, schema, table, schema, table)
         print('running sql script: {}'.format(sqlscript))
         subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
         print('copy table data: {}.{}'.format(schema, table))
-        subprocess.call('/bin/cp -f {}.{cfg.ibd.exp} {}/'.format(os.path.join(args['--backupdir'],schmea,table),os.path.join(args['--datadir'],schema)),shell=True)
+        subprocess.call('/bin/cp -f {}.{{cfg.ibd.exp}} {}/'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True)
         print('change file permission: {}.{}'.format(schema, table))
-        subprocess.call('chown {}.{} {}.{cfg.ibd.exp}'.format(args['mysql_os_user'],args['mysql_os_group'],os.path.join(args['--datadir'],schmea,table)),shell=True)
-        sqlscript="SET SESSION sql_log_bin=0; alter table {}.{} import tablespace;".format(schema, table)
+        subprocess.call('chown {}.{} {}.{{cfg.ibd.exp}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table)),shell=True)
+        sqlscript="SET SESSION sql_log_bin=0; {} alter table {}.{} import tablespace;".format(session_variable, schema, table)
         print('running sql script: {}'.format(sqlscript))
         subprocess.call('mysql {} -e {}'.format(' '.join(connect_list),sqlscript),shell=True)
     print('Complete!')
