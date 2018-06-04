@@ -55,7 +55,7 @@ def data(args):
         sqlscript = 'SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('+exclude_str+')'
         db_list = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
 
-    session_variable = 'SET pxc_strict_mode=DISABLED;' if args['--pxc'] else ''
+    session_variable = 'SET global pxc_strict_mode=DISABLED;' if args['--pxc'] else ''
     sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema in ('{}')".format("','".join(db_list))
     tables = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     for tb in tables:
@@ -64,11 +64,14 @@ def data(args):
         print('running sql script: {}'.format(sqlscript))
         subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
         print('copy table data: {}.{}'.format(schema, table))
-        subprocess.call('/bin/cp -f {}.{{cfg.ibd.exp}} {}/'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True)
+        subprocess.check_call('/bin/cp -f {}.{{cfg,ibd,exp}} {}/'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True)
         print('change file permission: {}.{}'.format(schema, table))
-        subprocess.call('chown {}.{} {}.{{cfg.ibd.exp}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table)),shell=True)
+        subprocess.check_call('chown {}.{} {}.{{cfg,ibd,exp}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table)),shell=True)
         sqlscript="SET SESSION sql_log_bin=0; {} alter table {}.{} import tablespace;".format(session_variable, schema, table)
         print('running sql script: {}'.format(sqlscript))
-        subprocess.call('mysql {} -e {}'.format(' '.join(connect_list),sqlscript),shell=True)
+        subprocess.check_call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
+    if args['--pxc']:
+        sqlscript="SET global pxc_strict_mode=ENFORCING;"
+        subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
     print('Complete!')
     return None
