@@ -19,7 +19,7 @@ from docopt import docopt
 import subprocess
 
 def schema(args):
-    exclude_list = ['mysql' ,'information_schema', 'performance_schema']
+    exclude_list = ['mysql' ,'information_schema', 'performance_schema', 'sys']
     if args['--exclude_database']:
         exclude_list.extend(args['--exclude_database'])
     exclude_str = ''

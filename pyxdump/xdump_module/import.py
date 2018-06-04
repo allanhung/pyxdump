@@ -37,7 +37,7 @@ def schema(args):
     return None
 
 def data(args):
-    exclude_list = ['mysql' ,'information_schema', 'performance_schema']
+    exclude_list = ['mysql' ,'information_schema', 'performance_schema', 'sys']
     if args['--exclude_database']:
         exclude_list.extend(args['--exclude_database'])
     exclude_str = ''
@@ -59,10 +59,12 @@ def data(args):
     sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema in ('{}')".format("','".join(db_list))
     tables = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     failed_tb_list = []
+    failed_tb_list = []
+    DEVNULL = open(os.devnull, 'w')
     for tb in tables:
         (schema, table) = tb.split('\t')
-        print('check file exists')
-        p = subprocess.popen('ls -l {}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True)
+        p = subprocess.Popen('ls -l {}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True, stdout=DEVNULL, stderr=DEVNULL)
+        p.wait()
         if p.returncode == 0:
             sqlscript="SET SESSION sql_log_bin=0; {} truncate table {}.{}; alter table {}.{} discard tablespace;".format(session_variable, schema, table, schema, table)
             print('running sql script: {}'.format(sqlscript))
@@ -80,7 +82,7 @@ def data(args):
         sqlscript="SET global pxc_strict_mode=ENFORCING;"
         subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
     if failed_tb_list:
-        print('\n'.join(failed_tb_list)
+        print('\n'.join(failed_tb_list))
         print('Complete with failed table!')
     else:
         print('Complete!')
