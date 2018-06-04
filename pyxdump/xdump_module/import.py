@@ -58,20 +58,30 @@ def data(args):
     session_variable = 'SET global pxc_strict_mode=DISABLED;' if args['--pxc'] else ''
     sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema in ('{}')".format("','".join(db_list))
     tables = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+    failed_tb_list = []
     for tb in tables:
         (schema, table) = tb.split('\t')
-        sqlscript="SET SESSION sql_log_bin=0; {} truncate table {}.{}; alter table {}.{} discard tablespace;".format(session_variable, schema, table, schema, table)
-        print('running sql script: {}'.format(sqlscript))
-        subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
-        print('copy table data: {}.{}'.format(schema, table))
-        subprocess.check_call('/bin/cp -f {}.{{cfg,ibd,exp}} {}/'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True)
-        print('change file permission: {}.{}'.format(schema, table))
-        subprocess.check_call('chown {}.{} {}.{{cfg,ibd,exp}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table)),shell=True)
-        sqlscript="SET SESSION sql_log_bin=0; {} alter table {}.{} import tablespace;".format(session_variable, schema, table)
-        print('running sql script: {}'.format(sqlscript))
-        subprocess.check_call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
+        print('check file exists')
+        p = subprocess.popen('ls -l {}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True)
+        if p.returncode == 0:
+            sqlscript="SET SESSION sql_log_bin=0; {} truncate table {}.{}; alter table {}.{} discard tablespace;".format(session_variable, schema, table, schema, table)
+            print('running sql script: {}'.format(sqlscript))
+            subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
+            print('copy table data: {}.{}'.format(schema, table))
+            subprocess.check_call('/bin/cp -f {}.{{cfg,ibd,exp}} {}/'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True)
+            print('change file permission: {}.{}'.format(schema, table))
+            subprocess.check_call('chown {}.{} {}.{{cfg,ibd,exp}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table)),shell=True)
+            sqlscript="SET SESSION sql_log_bin=0; {} alter table {}.{} import tablespace;".format(session_variable, schema, table)
+            print('running sql script: {}'.format(sqlscript))
+            subprocess.check_call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
+        else:
+            failed_tb_list.append('{}.{}'.format(schema, table))
     if args['--pxc']:
         sqlscript="SET global pxc_strict_mode=ENFORCING;"
         subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
-    print('Complete!')
+    if failed_tb_list:
+        print('\n'.join(failed_tb_list)
+        print('Complete with failed table!')
+    else:
+        print('Complete!')
     return None
