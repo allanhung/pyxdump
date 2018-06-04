@@ -56,9 +56,8 @@ def data(args):
         db_list = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
 
     session_variable = 'SET global pxc_strict_mode=DISABLED;' if args['--pxc'] else ''
-    sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema in ('{}')".format("','".join(db_list))
+    sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'InnoDB' and table_schema in ('{}')".format("','".join(db_list))
     tables = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
-    failed_tb_list = []
     failed_tb_list = []
     DEVNULL = open(os.devnull, 'w')
     for tb in tables:
@@ -81,6 +80,11 @@ def data(args):
     if args['--pxc']:
         sqlscript="SET global pxc_strict_mode=ENFORCING;"
         subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
+    sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'MyISAM' and table_schema in ('{}')".format("','".join(db_list))
+    tables = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+    for tb in tables:
+        (schema, table) = tb.split('\t')
+        print('The engine of table {}.{} is MyISAM'.format(schema, table))
     if failed_tb_list:
         print('## failed list ##############')
         print('\n'.join(failed_tb_list))
