@@ -82,6 +82,7 @@ def data(args):
         sqlscript="SET global pxc_strict_mode=ENFORCING;"
         subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
     if failed_tb_list:
+        print('## failed list ##############')
         print('\n'.join(failed_tb_list))
         print('Complete with failed table!')
     else:
