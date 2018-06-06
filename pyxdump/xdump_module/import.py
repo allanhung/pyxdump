@@ -25,6 +25,7 @@ Options:
 from docopt import docopt
 import subprocess
 import os
+import common
 
 def schema(args):
     connect_list = []
@@ -33,6 +34,18 @@ def schema(args):
     if args['--password']:
         connect_list.append('-p{0}'.format(args['--password']))
     rc = subprocess.call('mysql {0} < {1}'.format(' '.join(connect_list),args['--script_file']),shell=True)
+    sqlscript="select plugin_name, plugin_status, plugin_library from information_schema.plugins where plugin_name = 'validate_password';"
+    vp_plugin=common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True).strip().split('\n')
+    plugin_context = []
+    if vp_plugin[0]:
+        plugin_context = vp_plugin[0].split('\t')
+        if plugin_context[1] == 'ACTIVE':
+            sqlscript="UNINSTALL PLUGIN {0}".format(plugin_context[0])
+            subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
+    rc = subprocess.call('mysql {0} < {1}'.format(' '.join(connect_list),args['--script_file']),shell=True)
+    if plugin_context and plugin_context[1] == 'ACTIVE':
+        sqlscript="INSTALL PLUGIN {0} SONAME '{1}'".format(plugin_context[0], plugin_context[2])
+        subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
     print('import {0} complete!'.format(args['--script_file']))
     return None
 
@@ -53,11 +66,11 @@ def data(args):
         db_list = args['--database'].split(',')
     else:
         sqlscript = 'SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('+exclude_str+')'
-        db_list = (subprocess.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+        db_list = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
 
     session_variable = 'SET global pxc_strict_mode=DISABLED;' if args['--pxc'] else ''
     sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'InnoDB' and table_schema in ('{0}')".format("','".join(db_list))
-    tables = (subprocess.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+    tables = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     failed_tb_list = []
     DEVNULL = open(os.devnull, 'w')
     for tb in tables:
@@ -81,7 +94,7 @@ def data(args):
         sqlscript="SET global pxc_strict_mode=ENFORCING;"
         subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
     sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'MyISAM' and table_schema in ('{0}')".format("','".join(db_list))
-    tables = (subprocess.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+    tables = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     for tb in tables:
         (schema, table) = tb.split('\t')
         print('The engine of table {0}.{1} is MyISAM'.format(schema, table))

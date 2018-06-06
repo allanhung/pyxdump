@@ -16,4 +16,4 @@ def check_output(*popenargs, **kwargs):
         error = subprocess.CalledProcessError(retcode, cmd)
         error.output = output
         raise error
-return output
+    return output

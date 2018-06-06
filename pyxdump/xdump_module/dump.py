@@ -39,7 +39,10 @@ def schema(args):
         db_list = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     sqlscript = "show global variables like 'innodb_default_row_format'"
     rlist = common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True).strip().split('\n')
-    row_format = rlist[0].split('\t')[1]
+    if rlist[0]:
+        row_format = rlist[0].split('\t')[1]
+    else:
+        row_format = 'COMPACT'
     if args['--db_per_file'] or len(db_list) == 1:
         for db in db_list:
             subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt --single-transaction --events --routines --triggers --databases {1} --result-file={2}.sql'.format(' '.join(connect_list),db,os.path.join(args['--output_dir'],db)), shell=True)
