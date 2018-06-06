@@ -29,11 +29,11 @@ import os
 def schema(args):
     connect_list = []
     if args['--user']:
-        connect_list.append('-u{}'.format(args['--user']))
+        connect_list.append('-u{0}'.format(args['--user']))
     if args['--password']:
-        connect_list.append('-p{}'.format(args['--password']))
-    rc = subprocess.call('mysql {} < {}'.format(' '.join(connect_list),args['--script_file']),shell=True)
-    print('import {} complete!'.format(args['--script_file']))
+        connect_list.append('-p{0}'.format(args['--password']))
+    rc = subprocess.call('mysql {0} < {1}'.format(' '.join(connect_list),args['--script_file']),shell=True)
+    print('import {0} complete!'.format(args['--script_file']))
     return None
 
 def data(args):
@@ -45,46 +45,46 @@ def data(args):
         exclude_str = "'"+"','".join(exclude_list)+"'"
     connect_list = []
     if args['--user']:
-        connect_list.append('-u{}'.format(args['--user']))
+        connect_list.append('-u{0}'.format(args['--user']))
     if args['--password']:
-        connect_list.append('-p{}'.format(args['--password']))
+        connect_list.append('-p{0}'.format(args['--password']))
 
     if args['--database']:
         db_list = args['--database'].split(',')
     else:
         sqlscript = 'SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('+exclude_str+')'
-        db_list = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+        db_list = (subprocess.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
 
     session_variable = 'SET global pxc_strict_mode=DISABLED;' if args['--pxc'] else ''
-    sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'InnoDB' and table_schema in ('{}')".format("','".join(db_list))
-    tables = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+    sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'InnoDB' and table_schema in ('{0}')".format("','".join(db_list))
+    tables = (subprocess.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     failed_tb_list = []
     DEVNULL = open(os.devnull, 'w')
     for tb in tables:
         (schema, table) = tb.split('\t')
-        p = subprocess.Popen('ls -l {}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True, stdout=DEVNULL, stderr=DEVNULL)
+        p = subprocess.Popen('ls -l {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True, stdout=DEVNULL, stderr=DEVNULL)
         p.wait()
         if p.returncode == 0:
-            sqlscript="SET SESSION sql_log_bin=0; {} truncate table {}.{}; alter table {}.{} discard tablespace;".format(session_variable, schema, table, schema, table)
-            print('running sql script: {}'.format(sqlscript))
-            subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
-            print('copy table data: {}.{}'.format(schema, table))
-            subprocess.check_call('/bin/cp -f {}.{{cfg,ibd,exp}} {}/'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True)
-            print('change file permission: {}.{}'.format(schema, table))
-            subprocess.check_call('chown {}.{} {}.{{cfg,ibd,exp}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table)),shell=True)
-            sqlscript="SET SESSION sql_log_bin=0; {} alter table {}.{} import tablespace;".format(session_variable, schema, table)
-            print('running sql script: {}'.format(sqlscript))
-            subprocess.check_call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
+            sqlscript="SET SESSION sql_log_bin=0; {0} truncate table {1}.{2}; alter table {1}.{2} discard tablespace;".format(session_variable, schema, table)
+            print('running sql script: {0}'.format(sqlscript))
+            subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
+            print('copy table data: {0}.{1}'.format(schema, table))
+            subprocess.check_call('/bin/cp -f {0}.{{cfg,ibd,exp}} {1}/'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True)
+            print('change file permission: {0}.{1}'.format(schema, table))
+            subprocess.check_call('chown {0}.{1} {2}.{{cfg,ibd,exp}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table)),shell=True)
+            sqlscript="SET SESSION sql_log_bin=0; {0} alter table {1}.{2} import tablespace;".format(session_variable, schema, table)
+            print('running sql script: {0}'.format(sqlscript))
+            subprocess.check_call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
         else:
-            failed_tb_list.append('{}.{}'.format(schema, table))
+            failed_tb_list.append('{0}.{1}'.format(schema, table))
     if args['--pxc']:
         sqlscript="SET global pxc_strict_mode=ENFORCING;"
-        subprocess.call('mysql {} -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)
-    sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'MyISAM' and table_schema in ('{}')".format("','".join(db_list))
-    tables = (subprocess.check_output('mysql {} --batch --skip-column-names -e "{}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+        subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
+    sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'MyISAM' and table_schema in ('{0}')".format("','".join(db_list))
+    tables = (subprocess.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     for tb in tables:
         (schema, table) = tb.split('\t')
-        print('The engine of table {}.{} is MyISAM'.format(schema, table))
+        print('The engine of table {0}.{1} is MyISAM'.format(schema, table))
     if failed_tb_list:
         print('## failed list ##############')
         print('\n'.join(failed_tb_list))
