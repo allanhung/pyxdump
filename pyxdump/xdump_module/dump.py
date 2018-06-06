@@ -50,7 +50,7 @@ def schema(args):
         subprocess.call('mysqldump {} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt --single-transaction --events --routines --triggers --databases {} --result-file={}.sql'.format(' '.join(connect_list),' '.join(db_list),os.path.join(args['--output_dir'],'alldb')), shell=True)
         subprocess.call('sed -i -e "s/ENGINE=InnoDB/ENGINE=InnoDB ROW_FORMAT={}/g" {}.sql'.format(row_format,os.path.join(args['--output_dir'],'alldb')),shell=True)
         if args['--create_user']:
-            subprocess.call('pt-show-grants {} >> '.format(' '.join(connect_list),os.path.join(args['--output_dir'],'alldb')), shell=True)
+            subprocess.call('pt-show-grants {} >> {}'.format(' '.join(connect_list),os.path.join(args['--output_dir'],'alldb')), shell=True)
         print('Output File: {}.sql'.format(os.path.join(args['--output_dir'],'alldb')))
 
     return None
