@@ -18,6 +18,7 @@ Options:
 from docopt import docopt
 import subprocess
 import os
+import common
 
 def schema(args):
     exclude_list = ['mysql' ,'information_schema', 'performance_schema', 'sys']
@@ -35,9 +36,9 @@ def schema(args):
         db_list = args['--database'].split(',')
     else:
         sqlscript = 'SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('+exclude_str+')'
-        db_list = (subprocess.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+        db_list = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     sqlscript = "show global variables like 'innodb_default_row_format'"
-    rlist = subprocess.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True).strip().split('\n')
+    rlist = common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True).strip().split('\n')
     row_format = rlist[0].split('\t')[1]
     if args['--db_per_file'] or len(db_list) == 1:
         for db in db_list:
