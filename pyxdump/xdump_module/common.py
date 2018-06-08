@@ -7,6 +7,7 @@ def check_output(*popenargs, **kwargs):
     Python 2.6.2
     """
     process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
+    process.wait()
     output, unused_err = process.communicate()
     retcode = process.poll()
     if retcode:

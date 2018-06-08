@@ -71,8 +71,11 @@ def data(args):
     session_variable = 'SET global pxc_strict_mode=DISABLED;' if args['--pxc'] else ''
     sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'InnoDB' and table_schema in ('{0}')".format("','".join(db_list))
     tables = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
-    failed_tb_list = []
+    lost_bakfile_list = []
+    import_failed_list = []
     DEVNULL = open(os.devnull, 'w')
+    sqlscript="SET GLOBAL FOREIGN_KEY_CHECKS=0;"
+    subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
     for tb in tables:
         (schema, table) = tb.split('\t')
         p = subprocess.Popen('ls -l {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True, stdout=DEVNULL, stderr=DEVNULL)
@@ -87,21 +90,37 @@ def data(args):
             subprocess.check_call('chown {0}.{1} {2}.{{cfg,ibd,exp}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table)),shell=True)
             sqlscript="SET SESSION sql_log_bin=0; {0} alter table {1}.{2} import tablespace;".format(session_variable, schema, table)
             print('running sql script: {0}'.format(sqlscript))
-            subprocess.check_call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
+            x = subprocess.Popen('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
+            x.wait()
+            x_stdout, x_stderr = x.communicate()
+            if x.returncode > 0:
+                import_failed_list.('{0}.{1} import failed! error:\n{2}'.format(schema, table, x_stderr))
         else:
-            failed_tb_list.append('{0}.{1}'.format(schema, table))
+            subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt {1} {2} --result-file=/tmp/tmptb.sql"'.format(' '.join(connect_list),schema,table),shell=True)
+            sqlscript="SET SESSION sql_log_bin=0; drop table {1}.{2};".format(schema, table)
+            subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
+            subprocess.call('/bin/rm -f {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--datadir'],schema,table)),shell=True)
+            subprocess.call('mysql {0} < {1}'.format(' '.join(connect_list),'/tmp/tmptb.sql'),shell=True)
+            lost_bakfile_list.append('{0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table)))
     if args['--pxc']:
         sqlscript="SET global pxc_strict_mode=ENFORCING;"
         subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
+    sqlscript="SET GLOBAL FOREIGN_KEY_CHECKS=1;"
+    subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
     sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'MyISAM' and table_schema in ('{0}')".format("','".join(db_list))
     tables = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     for tb in tables:
-        (schema, table) = tb.split('\t')
-        print('The engine of table {0}.{1} is MyISAM'.format(schema, table))
-    if failed_tb_list:
-        print('## failed list ##############')
-        print('\n'.join(failed_tb_list))
-        print('Complete with failed table!')
+        if tb:
+            (schema, table) = tb.split('\t')
+            print('The engine of table {0}.{1} is MyISAM'.format(schema, table))
+    if import_failed_list:
+        print('## import failed ####################')
+        print('\n'.join(import_failed_list))
+        print('## import failed ####################')
+    if lost_bakfile_list:
+        print('## bak file not exists ##############')
+        print('\n'.join(lost_bakfile_list))
+        print('## bak file not exists ##############')
     else:
         print('Complete!')
     return None
