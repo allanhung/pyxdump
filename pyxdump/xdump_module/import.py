@@ -94,13 +94,13 @@ def data(args):
             x.wait()
             x_stdout, x_stderr = x.communicate()
             if x.returncode > 0:
-                import_failed_list.('{0}.{1} import failed! error:\n{2}'.format(schema, table, x_stderr))
+                import_failed_list.append('{0}.{1} import failed! error:\n{2}'.format(schema, table, x_stderr))
+                subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt {1} {2} --result-file=/tmp/tmptb.sql"'.format(' '.join(connect_list),schema,table),shell=True)
+                sqlscript="SET SESSION sql_log_bin=0; drop table {1}.{2};".format(schema, table)
+                subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
+                subprocess.call('/bin/rm -f {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--datadir'],schema,table)),shell=True)
+                subprocess.call('mysql {0} < {1}'.format(' '.join(connect_list),'/tmp/tmptb.sql'),shell=True)
         else:
-            subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt {1} {2} --result-file=/tmp/tmptb.sql"'.format(' '.join(connect_list),schema,table),shell=True)
-            sqlscript="SET SESSION sql_log_bin=0; drop table {1}.{2};".format(schema, table)
-            subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
-            subprocess.call('/bin/rm -f {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--datadir'],schema,table)),shell=True)
-            subprocess.call('mysql {0} < {1}'.format(' '.join(connect_list),'/tmp/tmptb.sql'),shell=True)
             lost_bakfile_list.append('{0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table)))
     if args['--pxc']:
         sqlscript="SET global pxc_strict_mode=ENFORCING;"
