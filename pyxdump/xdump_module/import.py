@@ -90,16 +90,17 @@ def data(args):
             subprocess.check_call('chown {0}.{1} {2}.{{cfg,ibd,exp}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table)),shell=True)
             sqlscript="SET SESSION sql_log_bin=0; {0} alter table {1}.{2} import tablespace;".format(session_variable, schema, table)
             print('running sql script: {0}'.format(sqlscript))
-            x = subprocess.Popen('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
+            x = subprocess.Popen('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             x.wait()
             x_stdout, x_stderr = x.communicate()
             if x.returncode > 0:
-                import_failed_list.append('{0}.{1} import failed! error:\n{2}'.format(schema, table, x_stderr))
-                subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt {1} {2} --result-file=/tmp/tmptb.sql"'.format(' '.join(connect_list),schema,table),shell=True)
-                sqlscript="SET SESSION sql_log_bin=0; drop table {1}.{2};".format(schema, table)
+                import_failed_list.append('{0}.{1} import failed! error:\n{2}'.format(schema, table, x_stderr.strip().replace("mysql: [Warning] Using a password on the command line interface can be insecure.\n",""))
+                subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt -d {1} {2} --result-file=/tmp/tmptb.sql'.format(' '.join(connect_list),schema,table),shell=True)
+                sqlscript="SET SESSION sql_log_bin=0; drop table {0}.{1};".format(schema, table)
                 subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
                 subprocess.call('/bin/rm -f {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--datadir'],schema,table)),shell=True)
-                subprocess.call('mysql {0} < {1}'.format(' '.join(connect_list),'/tmp/tmptb.sql'),shell=True)
+                sqlscript="SET SESSION sql_log_bin=0; use {0}; source /tmp/tmptb.sql;".format(schema)
+                subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
         else:
             lost_bakfile_list.append('{0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table)))
     if args['--pxc']:
