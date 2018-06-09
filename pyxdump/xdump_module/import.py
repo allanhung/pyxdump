@@ -94,7 +94,7 @@ def data(args):
             x.wait()
             x_stdout, x_stderr = x.communicate()
             if x.returncode > 0:
-                import_failed_list.append('{0}.{1} import failed! error:\n{2}'.format(schema, table, x_stderr.strip().replace("mysql: [Warning] Using a password on the command line interface can be insecure.\n",""))
+                import_failed_list.append('{0}.{1} import failed! error:\n{2}'.format(schema, table, x_stderr.strip().replace("mysql: [Warning] Using a password on the command line interface can be insecure.\n","")))
                 subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt -d {1} {2} --result-file=/tmp/tmptb.sql'.format(' '.join(connect_list),schema,table),shell=True)
                 sqlscript="SET SESSION sql_log_bin=0; drop table {0}.{1};".format(schema, table)
                 subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
