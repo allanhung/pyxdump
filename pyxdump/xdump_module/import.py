@@ -59,20 +59,19 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         sqlscript="use {0}; source {1}/{2}.sql;".format(schema, os.path.join('/dbbackup',schema), table)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
-        sqlscript="alter table {0}.{1} discard tablespace;".format(schema, table)
+        sqlscript="alter table {0}.\`{1}\` discard tablespace;".format(schema, table)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         fix_script.append('docker exec fix_mysql cp /dbbackup/{0}/{1}.{{cfg,ibd}} /var/lib/mysql/{0}/'.format(schema, table))
         fix_script.append('docker exec fix_mysql chown mysql.mysql -R /var/lib/mysql/{0}'.format(schema))
-        sqlscript="alter table {0}.{1} import tablespace;".format(schema, table)
+        sqlscript="alter table {0}.\`{1}\` import tablespace;".format(schema, table)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
-
 
     fix_script.append('docker stop fix_mysql && docker rm fix_mysql')
     fix_script.append('docker run -d --name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export -p 3306:3306 mysql:{2}'.format(tmp_dbpass, fix_base_dir, mysql_dst_version))
     fix_script.append('docker exec fix_mysql mysql_upgrade -uroot -p{}'.format(tmp_dbpass))
     for tb in tb_list:
         (schema, table) = tb.split('\t')
-        sqlscript="use {0}; flush tables {1} for export;".format(schema, table)
+        sqlscript="use {0}; flush tables \`{1}\` for export;".format(schema, table)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         fix_script.append('docker exec fix_mysql mkdir -p /export/{0}'.format(schema))
         fix_script.append('docker exec fix_mysql cp /var/lib/mysql/{0}/{1}.{{cfg,ibd}} /export/{0}/'.format(schema, table))
