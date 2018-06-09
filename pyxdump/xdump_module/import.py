@@ -71,10 +71,9 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
     fix_script.append('docker exec fix_mysql mysql_upgrade -uroot -p{}'.format(tmp_dbpass))
     for tb in tb_list:
         (schema, table) = tb.split('\t')
-        sqlscript="use {0}; flush tables \`{1}\` for export;".format(schema, table)
-        fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         fix_script.append('docker exec fix_mysql mkdir -p /export/{0}'.format(schema))
-        fix_script.append('docker exec fix_mysql cp /var/lib/mysql/{0}/{1}.{{cfg,ibd}} /export/{0}/'.format(schema, table))
+        sqlscript="use {0}; flush tables \`{1}\` for export;\!bash cp /var/lib/mysql/{0}/{1}.cfg /export/{0}/ && cp /var/lib/mysql/{0}/{1}.ibd /export/{0}/".format(schema, table)
+        fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         sqlscript="unlock tables;"
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
     fix_script.append('docker stop fix_mysql && docker rm fix_mysql')
@@ -83,9 +82,9 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
     for tb in tb_list:
         (schema, table) = tb.split('\t')
         fix_script.append('mv {0}.cfg {0}.cfg.bak'.format(os.path.join(args['--backupdir'],schema,table)))
-        fix_script.append('mv {0}.exp {0}.ibd.bak'.format(os.path.join(args['--backupdir'],schema,table)))
         fix_script.append('mv {0}.ibd {0}.ibd.bak'.format(os.path.join(args['--backupdir'],schema,table)))
-        fix_script.append('sshpass -e scp {0}:{1}.{{cfg,ibd}} {2}'.format(fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
+        fix_script.append('sshpass -e scp {0}:{1}.cfg {2}'.format(fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
+        fix_script.append('sshpass -e scp {0}:{1}.ibd {2}'.format(fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
     return '\n'.join(fix_script)
 
 def schema(args):
@@ -165,6 +164,8 @@ def data(args):
                 subprocess.call('/bin/rm -f {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--datadir'],schema,table)),shell=True)
                 sqlscript="SET SESSION sql_log_bin=0; use {0}; source /tmp/{0}.{1}.sql;".format(schema, table)
                 subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
+            else:
+                subprocess.call('/bin/rm -f {0}.{{cfg,exp}}'.format(os.path.join(args['--datadir'],schema,table)),shell=True)
         else:
             lost_bakfile_list.append('{0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table)))
     if args['--pxc']:
