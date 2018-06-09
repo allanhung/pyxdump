@@ -42,42 +42,43 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
     tmp_dbpass='dbpass'
     connect_list=[]
     connect_list.append('-uroot')
-    connect_list.append('-p{0}'.format(tmp_dbpass)
+    connect_list.append('-p{0}'.format(tmp_dbpass))
     fix_script=[]
     fix_script.append('# on source')
     for tb in tb_list:
         (schema, table) = tb.split('\t')
-        fix_script.append('sshpass -e ssh {0}@{1} mkdir -p {2}'.format(os.path.join(args['--backupdir'],schema,table), fix_host, os.path.join(fix_base_dir,'backup',schema)))
-        fix_script.append('sshpass -e scp {0}.{{cfg,ibd,exp}} {2}:{3}/'.format(os.path.join(args['--backupdir'],schema,table), fix_host, os.path.join(fix_base_dir,'backup',schema)))
-        fix_script.append('sshpass -e scp /tmp/{0}.{1}.sql {2}:{3}/{0}/{1].sql'.format(schema, table, fix_host, os.path.join(fix_base_dir,'backup')))
+        fix_script.append('sshpass -e ssh {0} mkdir -p {1}'.format(fix_host, os.path.join(fix_base_dir,'backup',schema)))
+        fix_script.append('sshpass -e scp {0}.{{cfg,ibd,exp}} {1}:{2}/'.format(os.path.join(args['--backupdir'],schema,table), fix_host, os.path.join(fix_base_dir,'backup',schema)))
+        fix_script.append('sshpass -e scp /tmp/{0}.{1}.sql {2}:{3}/{0}/{1}.sql'.format(schema, table, fix_host, os.path.join(fix_base_dir,'backup')))
 
-    fix_script.append('# on {0}'.foramt(fix_host))
-    fix_script.append('docker run -d -name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export -p 3306:3306 mysql:{1}'.format(tmp_dbpass, fix_base_dir, mysql_src_version))
+    fix_script.append('# on {0}'.format(fix_host))
+    fix_script.append('docker run -d --name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export -p 3306:3306 mysql:{2}'.format(tmp_dbpass, fix_base_dir, mysql_src_version))
     for tb in tb_list:
         (schema, table) = tb.split('\t')
         sqlscript="create database if not exists {0};".format(schema)
-        fix_script.append('docker exec mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
-        sqlscript="use {0}; source {1}{2}.sql;".format(schema, os.path.join('/dbbackup',schema), table)
-        fix_script.append('docker exec mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
+        fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
+        sqlscript="use {0}; source {1}/{2}.sql;".format(schema, os.path.join('/dbbackup',schema), table)
+        fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         sqlscript="alter table {0}.{1} discard tablespace;".format(schema, table)
-        fix_script.append('docker exec mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
-        fix_script.append('docker exec cp /dbbackup/{0}/{1}.{cfg,ibd} /var/lib/mysql/{0}/'.format(schema, table))
-        fix_script.append('docker exec chown mysql.mysql /var/lib/mysql/{0}/{1}.*'.format(schema, table))
+        fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
+        fix_script.append('docker exec fix_mysql cp /dbbackup/{0}/{1}.{{cfg,ibd}} /var/lib/mysql/{0}/'.format(schema, table))
+        fix_script.append('docker exec fix_mysql chown mysql.mysql -R /var/lib/mysql/{0}'.format(schema))
         sqlscript="alter table {0}.{1} import tablespace;".format(schema, table)
-        fix_script.append('docker exec mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
+        fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
 
 
-    fix_script.append('docker stop fix_mysql')
-    fix_script.append('docker rm fix_mysql')
-    fix_script.append('docker run -d -name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export -p 3306:3306 mysql:{1}'.format(tmp_dbpass, fix_base_dir, mysql_dst_version))
+    fix_script.append('docker stop fix_mysql && docker rm fix_mysql')
+    fix_script.append('docker run -d --name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export -p 3306:3306 mysql:{2}'.format(tmp_dbpass, fix_base_dir, mysql_dst_version))
     fix_script.append('docker exec fix_mysql mysql_upgrade -uroot -p{}'.format(tmp_dbpass))
     for tb in tb_list:
         (schema, table) = tb.split('\t')
-        sqlscript="flush table {0}.{1} for export;".format(schema, table)
-        fix_script.append('docker exec mkdir -p /export/{0}'.format(schema))
-        fix_script.append('docker exec cp /var/lib/mysql/{0}/{1}.{cfg,ibd} /export/{0}/'.format(schema, table))
+        sqlscript="use {0}; flush tables {1} for export;".format(schema, table)
+        fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
+        fix_script.append('docker exec fix_mysql mkdir -p /export/{0}'.format(schema))
+        fix_script.append('docker exec fix_mysql cp /var/lib/mysql/{0}/{1}.{{cfg,ibd}} /export/{0}/'.format(schema, table))
         sqlscript="unlock tables;"
-        fix_script.append('docker exec mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
+        fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
+    fix_script.append('docker stop fix_mysql && docker rm fix_mysql')
 
     fix_script.append('# on source')
     for tb in tb_list:
@@ -85,7 +86,7 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         fix_script.append('mv {0}.cfg {0}.cfg.bak'.format(os.path.join(args['--backupdir'],schema,table)))
         fix_script.append('mv {0}.exp {0}.ibd.bak'.format(os.path.join(args['--backupdir'],schema,table)))
         fix_script.append('mv {0}.ibd {0}.ibd.bak'.format(os.path.join(args['--backupdir'],schema,table)))
-        fix_script.append('sshpass -e scp {0}:{1}/{2}.{{cfg,ibd}} {3}'.format(fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
+        fix_script.append('sshpass -e scp {0}:{1}.{{cfg,ibd}} {2}'.format(fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
     return '\n'.join(fix_script)
 
 def schema(args):
@@ -140,7 +141,7 @@ def data(args):
     subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
     for tb in tables:
         (schema, table) = tb.split('\t')
-        p = subprocess.Popen('ls -l {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table),os.path.join(args['--datadir'],schema)),shell=True, stdout=DEVNULL, stderr=DEVNULL)
+        p = subprocess.Popen('ls -l {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table.replace('.','\@002e')),os.path.join(args['--datadir'],schema)),shell=True, stdout=DEVNULL, stderr=DEVNULL)
         p.wait()
         if p.returncode == 0:
             sqlscript="SET SESSION sql_log_bin=0; {0} truncate table {1}.{2}; alter table {1}.{2} discard tablespace;".format(session_variable, schema, table)
@@ -158,11 +159,12 @@ def data(args):
             if x.returncode > 0:
                 import_failed_list.append('{0}.{1} import failed! error:\n{2}'.format(schema, table, x_stderr.strip().replace("mysql: [Warning] Using a password on the command line interface can be insecure.\n","")))
                 import_failed_xlist.append('{0}.{1}'.format(schema, table))
-                subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt -d {1} {2} --result-file=/tmp/tmptb.sql'.format(' '.join(connect_list),schema,table),shell=True)
+                subprocess.call('mkdir -p /tmp/{0}'.format(schema),shell=True)
+                subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt -d {1} {2} --result-file=/tmp/{1}.{2}.sql'.format(' '.join(connect_list),schema,table),shell=True)
                 sqlscript="SET SESSION sql_log_bin=0; drop table {0}.{1};".format(schema, table)
                 subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
                 subprocess.call('/bin/rm -f {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--datadir'],schema,table)),shell=True)
-                sqlscript="SET SESSION sql_log_bin=0; use {0}; source /tmp/tmptb.sql;".format(schema)
+                sqlscript="SET SESSION sql_log_bin=0; use {0}; source /tmp/{0}.{1}.sql;".format(schema, table)
                 subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
         else:
             lost_bakfile_list.append('{0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table)))
@@ -186,7 +188,7 @@ def data(args):
         print('\n'.join(lost_bakfile_list))
         print('## bak file not exists ##############')
     if import_failed_xlist:
-        print('run follow command to fix:\npyxdump import fix --backupdir {0} --table_list {1} --fix_host {2} --mysql_src_ver 5.6 --mysql_dst_ver 5.7" to fix'.format(args['--backupdir'],','.join(import_failed_xlist),'192.168.1.1'))
+        print('run follow command to fix:\npyxdump import fix --backupdir {0} --table_list {1} --fix_host {2} --mysql_src_ver 5.6 --mysql_dst_ver 5.7'.format(args['--backupdir'],','.join(import_failed_xlist),'192.168.1.1'))
     else:
         print('Complete!')
     return None
