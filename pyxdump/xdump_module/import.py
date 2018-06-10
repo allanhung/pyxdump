@@ -65,7 +65,7 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         sqlscript="alter table {0}.\`{1}\` discard tablespace;".format(schema, table)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
-        fix_script.append('docker exec fix_mysql cp /dbbackup/{0}/{1}.{{cfg,ibd}} /var/lib/mysql/{0}/'.format(schema, table))
+        fix_script.append('mv {0}/{1}/{2}.{{cfg,ibd}} {3}/{1}/'.format(os.path.join(fix_base_dir,'backup') schema, table, os.path.join(fix_base_dir,'data')))
         fix_script.append('docker exec fix_mysql chown mysql.mysql -R /var/lib/mysql/{0}'.format(schema))
         sqlscript="alter table {0}.\`{1}\` import tablespace;".format(schema, table)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
@@ -79,6 +79,8 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         sqlscript="use {0}; flush tables \`{1}\` for export;\!bash cp /var/lib/mysql/{0}/{1}.cfg /export/{0}/ && cp /var/lib/mysql/{0}/{1}.ibd /export/{0}/".format(schema, table)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         sqlscript="unlock tables;"
+        fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
+        sqlscript="use {0}; drop  table \`{1}\`;".format(schema, table)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
     fix_script.append('docker stop fix_mysql && docker rm fix_mysql')
 
