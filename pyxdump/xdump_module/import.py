@@ -5,7 +5,7 @@ mysql import schema and data
 
 Usage:
   pyxdump import schema [--user USER] [--password PASSWORD] [--script_file SCRIPTFILE]
-  pyxdump import data --backupdir BACKUPDIR --datadir DATADIR [--user USER] [--password PASSWORD] [--mysql_os_user OSUSER] [--mysql_os_group OSGROUP]  [--database DATABASE] [--exclude_database EXDB] [--pxc]
+  pyxdump import data --backupdir BACKUPDIR --datadir DATADIR [--table_list TBLIST] [--user USER] [--password PASSWORD] [--mysql_os_user OSUSER] [--mysql_os_group OSGROUP]  [--database DATABASE] [--exclude_database EXDB] [--pxc]
   pyxdump import fix --backupdir BACKUPDIR --table_list TBLIST --fix_host FHOST [--mysql_src_ver MSV] [--mysql_dst_ver MDV] [--sshuser SSHUSER]
 
 Arguments:
@@ -54,7 +54,7 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         fix_script.append('sshpass -e scp /tmp/{0}.{1}.sql {2}@{3}:{4}/{0}/{1}.sql'.format(schema, table, args['--sshuser'], fix_host, os.path.join(tmp_dir)))
 
     fix_script.append('# on {0}'.format(fix_host))
-    fix_script.append('docker run -d --name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export -p 3306:3306 mysql:{2}'.format(tmp_dbpass, fix_base_dir, mysql_src_version))
+    fix_script.append('docker run -d --name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export mysql:{2}'.format(tmp_dbpass, fix_base_dir, mysql_src_version))
     for tb in tb_list:
         (schema, table) = tb.split('\t')
         fix_script.append('mkdir -p {0}'.format(os.path.join(fix_base_dir,'backup',schema)))
@@ -65,13 +65,13 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         sqlscript="alter table {0}.\`{1}\` discard tablespace;".format(schema, table)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
-        fix_script.append('mv {0}/{1}/{2}.{{cfg,ibd}} {3}/{1}/'.format(os.path.join(fix_base_dir,'backup') schema, table, os.path.join(fix_base_dir,'data')))
+        fix_script.append('mv {0}/{1}/{2}.{{cfg,ibd}} {3}/{1}/'.format(os.path.join(fix_base_dir,'backup'), schema, table, os.path.join(fix_base_dir,'data')))
         fix_script.append('docker exec fix_mysql chown mysql.mysql -R /var/lib/mysql/{0}'.format(schema))
         sqlscript="alter table {0}.\`{1}\` import tablespace;".format(schema, table)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
 
     fix_script.append('docker stop fix_mysql && docker rm fix_mysql')
-    fix_script.append('docker run -d --name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export -p 3306:3306 mysql:{2}'.format(tmp_dbpass, fix_base_dir, mysql_dst_version))
+    fix_script.append('docker run -d --name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export mysql:{2}'.format(tmp_dbpass, fix_base_dir, mysql_dst_version))
     fix_script.append('docker exec fix_mysql mysql_upgrade -uroot -p{}'.format(tmp_dbpass))
     for tb in tb_list:
         (schema, table) = tb.split('\t')
@@ -91,6 +91,7 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         fix_script.append('mv {0}.ibd {0}.ibd.bak'.format(os.path.join(args['--backupdir'],schema,table)))
         fix_script.append('sshpass -e scp {0}@{1}:{2}.cfg {3}'.format(args['--sshuser'], fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
         fix_script.append('sshpass -e scp {0}@{1}:{2}.ibd {3}'.format(args['--sshuser'], fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
+    fix_script.append('run follow command to import data:\npyxdump import data --backupdir {0} --table_list {1} --datadir --user --password'.format(args['--backupdir'],args['--table_list']))
     return '\n'.join(fix_script)
 
 def schema(args):
@@ -116,6 +117,7 @@ def schema(args):
     return None
 
 def data(args):
+    tables=args['--table_list'].replace('.','\t').split(',') if args['--table_list'] else []
     exclude_list = ['mysql' ,'information_schema', 'performance_schema', 'sys']
     if args['--exclude_database']:
         exclude_list.extend(args['--exclude_database'])
@@ -128,15 +130,16 @@ def data(args):
     if args['--password']:
         connect_list.append('-p{0}'.format(args['--password']))
 
-    if args['--database']:
-        db_list = args['--database'].split(',')
-    else:
-        sqlscript = 'SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('+exclude_str+')'
-        db_list = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+    if not tables:
+        if args['--database']:
+            db_list = args['--database'].split(',')
+        else:
+            sqlscript = 'SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('+exclude_str+')'
+            db_list = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+        sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'InnoDB' and table_schema in ('{0}')".format("','".join(db_list))
+        tables = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
 
     session_variable = 'SET global pxc_strict_mode=DISABLED;' if args['--pxc'] else ''
-    sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'InnoDB' and table_schema in ('{0}')".format("','".join(db_list))
-    tables = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
     lost_bakfile_list = []
     import_failed_list = []
     import_failed_xlist = []
