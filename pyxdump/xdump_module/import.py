@@ -182,12 +182,13 @@ def data(args):
         subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
     sqlscript="SET GLOBAL FOREIGN_KEY_CHECKS=1;"
     subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
-    sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'MyISAM' and table_schema in ('{0}')".format("','".join(db_list))
-    tables = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
-    for tb in tables:
-        if tb:
-            (schema, table) = tb.split('\t')
-            print('The engine of table {0}.{1} is MyISAM'.format(schema, table))
+    if not args['--table_list']:
+        sqlscript = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and ENGINE = 'MyISAM' and table_schema in ('{0}')".format("','".join(db_list))
+        tables = (common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)).strip().split('\n')
+        for tb in tables:
+            if tb:
+                (schema, table) = tb.split('\t')
+                print('The engine of table {0}.{1} is MyISAM'.format(schema, table))
     if import_failed_list:
         print('## import failed ####################')
         print('\n'.join(import_failed_list))
