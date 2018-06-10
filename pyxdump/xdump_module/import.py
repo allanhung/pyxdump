@@ -38,8 +38,10 @@ def fix(args):
     return None
 
 def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
+    tmp_dir='/tmp'
     fix_base_dir='/opt/mysql'
     tmp_dbpass='dbpass'
+    sudo='sudo' if args['--sudo'] else ''
     connect_list=[]
     connect_list.append('-uroot')
     connect_list.append('-p{0}'.format(tmp_dbpass))
@@ -47,14 +49,16 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
     fix_script.append('# on source')
     for tb in tb_list:
         (schema, table) = tb.split('\t')
-        fix_script.append('sshpass -e ssh {0} mkdir -p {1}'.format(fix_host, os.path.join(fix_base_dir,'backup',schema)))
-        fix_script.append('sshpass -e scp {0}.{{cfg,ibd,exp}} {1}:{2}/'.format(os.path.join(args['--backupdir'],schema,table), fix_host, os.path.join(fix_base_dir,'backup',schema)))
-        fix_script.append('sshpass -e scp /tmp/{0}.{1}.sql {2}:{3}/{0}/{1}.sql'.format(schema, table, fix_host, os.path.join(fix_base_dir,'backup')))
+        fix_script.append('sshpass -e ssh {0} {1} mkdir -p {2}'.format(fix_host, sudo, os.path.join(tmp_dir,schema)))
+        fix_script.append('sshpass -e scp {0}.{{cfg,ibd}} {1}:{2}/'.format(os.path.join(args['--backupdir'],schema,table), fix_host, os.path.join(tmp_dir,schema)))
+        fix_script.append('sshpass -e scp /tmp/{0}.{1}.sql {2}:{3}/{0}/{1}.sql'.format(schema, table, fix_host, os.path.join(tmp_dir)))
 
     fix_script.append('# on {0}'.format(fix_host))
     fix_script.append('docker run -d --name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export -p 3306:3306 mysql:{2}'.format(tmp_dbpass, fix_base_dir, mysql_src_version))
     for tb in tb_list:
         (schema, table) = tb.split('\t')
+        fix_script.append('mkdir -p {0}'.format(os.path.join(fix_base_dir,'backup',schema)))
+        fix_script.append('mv {0}.{{cfg,ibd,sql}} {1}'.format(os.path.join(tmp_dir,schema,table), os.path.join(fix_base_dir,'backup',schema)))
         sqlscript="create database if not exists {0};".format(schema)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         sqlscript="use {0}; source {1}/{2}.sql;".format(schema, os.path.join('/dbbackup',schema), table)
