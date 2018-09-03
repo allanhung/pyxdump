@@ -6,7 +6,7 @@ mysql import schema and data
 Usage:
   pyxdump import schema [--user USER] [--password PASSWORD] [--script_file SCRIPTFILE]
   pyxdump import data --backupdir BACKUPDIR --datadir DATADIR [--table_list TBLIST] [--user USER] [--password PASSWORD] [--mysql_os_user OSUSER] [--mysql_os_group OSGROUP]  [--database DATABASE] [--exclude_database EXDB] [--pxc]
-  pyxdump import fix --backupdir BACKUPDIR --table_list TBLIST --fix_host FHOST [--mysql_src_ver MSV] [--mysql_dst_ver MDV] [--sshuser SSHUSER]
+  pyxdump import fix --backupdir BACKUPDIR --table_list TBLIST --fix_dir FDIR [--fix_host FHOST] [--mysql_src_ver MSV] [--mysql_dst_ver MDV] [--sshuser SSHUSER]
 
 Arguments:
   --backupdir BACKUPDIR     database backup directory [default: /dbbackup]
@@ -22,7 +22,8 @@ Options:
   --mysql_src_ver MSV       MySQL Version for export host [default: 5.6]
   --mysql_dst_ver MSV       MySQL Version for target host [default: 5.7]
   --sshuser SSHUSER         MySQL Version for target host [default: root]
-  --fix_host FHOST          Machine can docker (example: 192.168.1.1)
+  --fix_host FHOST          Machine can docker (example: 192.168.1.1) [default: localhost]
+  --fix_dir FDIR            Target dir (example: /tmp)
   --exclude_database EXDB   database exclude list (example: db3,db4)
   --pxc                     If is Percona Xtra Cluster
   -h --help                 Show this screen.
@@ -39,26 +40,31 @@ def fix(args):
     return None
 
 def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
-    tmp_dir='/tmp'
-    fix_base_dir='/opt/mysql'
+    tmp_dir=args['--fix_dir']
+    fix_base_dir=os.path.join(tmp_dir,'fix')
     tmp_dbpass='dbpass'
     connect_list=[]
     connect_list.append('-uroot')
     connect_list.append('-p{0}'.format(tmp_dbpass))
     fix_script=[]
-    fix_script.append('# on source')
-    for tb in tb_list:
-        (schema, table) = tb.split('\t')
-        fix_script.append('sshpass -e ssh {0}@{1} mkdir -p {2}'.format(args['--sshuser'], fix_host, os.path.join(tmp_dir,schema)))
-        fix_script.append('sshpass -e scp {0}.{{cfg,ibd}} {1}@{2}:{3}/'.format(os.path.join(args['--backupdir'],schema,table), args['--sshuser'], fix_host, os.path.join(tmp_dir,schema)))
-        fix_script.append('sshpass -e scp /tmp/{0}.{1}.sql {2}@{3}:{4}/{0}/{1}.sql'.format(schema, table, args['--sshuser'], fix_host, os.path.join(tmp_dir)))
+    if fix_host <> 'localhost':
+        fix_script.append('# on source')
+        for tb in tb_list:
+            (schema, table) = tb.split('\t')
+            fix_script.append('sshpass -e ssh {0}@{1} mkdir -p {2}'.format(args['--sshuser'], fix_host, os.path.join(tmp_dir,schema)))
+            fix_script.append('sshpass -e scp {0}.{{cfg,ibd}} {1}@{2}:{3}/'.format(os.path.join(args['--backupdir'],schema,table), args['--sshuser'], fix_host, os.path.join(tmp_dir,schema)))
+            fix_script.append('sshpass -e scp /tmp/{0}.{1}.sql {2}@{3}:{4}/{0}/{1}.sql'.format(schema, table, args['--sshuser'], fix_host, os.path.join(tmp_dir)))
 
-    fix_script.append('# on {0}'.format(fix_host))
+    if fix_host <> 'localhost':
+        fix_script.append('# on {0}'.format(fix_host))
     fix_script.append('docker run -d --name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export mysql:{2}'.format(tmp_dbpass, fix_base_dir, mysql_src_version))
     for tb in tb_list:
         (schema, table) = tb.split('\t')
         fix_script.append('mkdir -p {0}'.format(os.path.join(fix_base_dir,'backup',schema)))
-        fix_script.append('mv {0}.{{cfg,ibd,sql}} {1}'.format(os.path.join(tmp_dir,schema,table), os.path.join(fix_base_dir,'backup',schema)))
+        if fix_host == 'localhost':
+            fix_script.append('cp {0}.{{cfg,ibd,sql}} {1}'.format(os.path.join(tmp_dir,schema,table), os.path.join(fix_base_dir,'backup',schema)))
+        else:
+            fix_script.append('mv {0}.{{cfg,ibd,sql}} {1}'.format(os.path.join(tmp_dir,schema,table), os.path.join(fix_base_dir,'backup',schema)))
         sqlscript="create database if not exists {0};".format(schema)
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
         sqlscript="use {0}; source {1}/{2}.sql;".format(schema, os.path.join('/dbbackup',schema), table)
@@ -84,13 +90,18 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
     fix_script.append('docker stop fix_mysql && docker rm fix_mysql')
 
-    fix_script.append('# on source')
+    if fix_host <> 'localhost':
+        fix_script.append('# on source')
     for tb in tb_list:
         (schema, table) = tb.split('\t')
         fix_script.append('mv {0}.cfg {0}.cfg.bak'.format(os.path.join(args['--backupdir'],schema,table)))
         fix_script.append('mv {0}.ibd {0}.ibd.bak'.format(os.path.join(args['--backupdir'],schema,table)))
-        fix_script.append('sshpass -e scp {0}@{1}:{2}.cfg {3}'.format(args['--sshuser'], fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
-        fix_script.append('sshpass -e scp {0}@{1}:{2}.ibd {3}'.format(args['--sshuser'], fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
+        if fix_host == 'localhost':
+            fix_script.append('cp {0}.cfg {1}'.format(os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
+            fix_script.append('cp {0}.ibd {1}'.format(os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
+        else:
+            fix_script.append('sshpass -e scp {0}@{1}:{2}.cfg {3}'.format(args['--sshuser'], fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
+            fix_script.append('sshpass -e scp {0}@{1}:{2}.ibd {3}'.format(args['--sshuser'], fix_host, os.path.join(fix_base_dir,'export',schema,table),os.path.join(args['--backupdir'],schema)))
     fix_script.append('run follow command to import data:\npyxdump import data --backupdir {0} --table_list {1} --datadir --user --password'.format(args['--backupdir'],args['--table_list']))
     return '\n'.join(fix_script)
 
