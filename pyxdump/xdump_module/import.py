@@ -62,7 +62,8 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         (schema, table) = tb.split('\t')
         fix_script.append('mkdir -p {0}'.format(os.path.join(fix_base_dir,'backup',schema)))
         if fix_host == 'localhost':
-            fix_script.append('cp {0}.{{cfg,ibd,sql}} {1}'.format(os.path.join(tmp_dir,schema,table), os.path.join(fix_base_dir,'backup',schema)))
+            fix_script.append('cp {0}.{{cfg,ibd}} {1}'.format(os.path.join(tmp_dir,schema,table), os.path.join(fix_base_dir,'backup',schema)))
+            fix_script.append('cp /tmp/{0}.{1}.sql {2}/{1}.sql'.format(schema, table, os.path.join(fix_base_dir,'backup',schema)))
         else:
             fix_script.append('mv {0}.{{cfg,ibd,sql}} {1}'.format(os.path.join(tmp_dir,schema,table), os.path.join(fix_base_dir,'backup',schema)))
         sqlscript="create database if not exists {0};".format(schema)
