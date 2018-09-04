@@ -6,7 +6,7 @@ mysql import schema and data
 Usage:
   pyxdump import schema [--user USER] [--password PASSWORD] [--script_file SCRIPTFILE]
   pyxdump import data --backupdir BACKUPDIR --datadir DATADIR [--table_list TBLIST] [--user USER] [--password PASSWORD] [--mysql_os_user OSUSER] [--mysql_os_group OSGROUP]  [--database DATABASE] [--exclude_database EXDB] [--pxc]
-  pyxdump import fix --backupdir BACKUPDIR --table_list TBLIST --fix_dir FDIR [--fix_host FHOST] [--mysql_src_ver MSV] [--mysql_dst_ver MDV] [--sshuser SSHUSER]
+  pyxdump import fix --backupdir BACKUPDIR --table_list TBLIST [--fix_dir FDIR] [--fix_host FHOST] [--mysql_src_ver MSV] [--mysql_dst_ver MDV] [--sshuser SSHUSER]
 
 Arguments:
   --backupdir BACKUPDIR     database backup directory [default: /dbbackup]
@@ -23,7 +23,7 @@ Options:
   --mysql_dst_ver MSV       MySQL Version for target host [default: 5.7]
   --sshuser SSHUSER         MySQL Version for target host [default: root]
   --fix_host FHOST          Machine can docker (example: 192.168.1.1) [default: localhost]
-  --fix_dir FDIR            Target dir (example: /tmp)
+  --fix_dir FDIR            Target dir (example: /tmp) [default: /tmp]
   --exclude_database EXDB   database exclude list (example: db3,db4)
   --pxc                     If is Percona Xtra Cluster
   -h --help                 Show this screen.
@@ -62,8 +62,8 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         (schema, table) = tb.split('\t')
         fix_script.append('mkdir -p {0}'.format(os.path.join(fix_base_dir,'backup',schema)))
         if fix_host == 'localhost':
-            fix_script.append('cp {0}.{{cfg,ibd}} {1}'.format(os.path.join(tmp_dir,schema,table), os.path.join(fix_base_dir,'backup',schema)))
-            fix_script.append('cp /tmp/{0}.{1}.sql {2}/{1}.sql'.format(schema, table, os.path.join(fix_base_dir,'backup',schema)))
+            fix_script.append('/bin/cp -f {0}.{{cfg,ibd}} {1}'.format(os.path.join(tmp_dir,schema,table), os.path.join(fix_base_dir,'backup',schema)))
+            fix_script.append('/bin/cp -f /tmp/{0}.{1}.sql {2}/{1}.sql'.format(schema, table, os.path.join(fix_base_dir,'backup',schema)))
         else:
             fix_script.append('mv {0}.{{cfg,ibd,sql}} {1}'.format(os.path.join(tmp_dir,schema,table), os.path.join(fix_base_dir,'backup',schema)))
         sqlscript="create database if not exists {0};".format(schema)
