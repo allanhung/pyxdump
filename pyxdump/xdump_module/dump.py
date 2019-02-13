@@ -31,7 +31,7 @@ def schema(args):
     if args['--user']:
         connect_list.append('-u{0}'.format(args['--user']))
     if args['--password']:
-        connect_list.append('-p{0}'.format(args['--password']))
+        connect_list.append('-p\'{0}\''.format(args['--password']))
     if args['--database']:
         db_list = args['--database'].split(',')
     else:

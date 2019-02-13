@@ -111,7 +111,7 @@ def schema(args):
     if args['--user']:
         connect_list.append('-u{0}'.format(args['--user']))
     if args['--password']:
-        connect_list.append('-p{0}'.format(args['--password']))
+        connect_list.append('-p\'{0}\''.format(args['--password']))
     rc = subprocess.call('mysql {0} < {1}'.format(' '.join(connect_list),args['--script_file']),shell=True)
     sqlscript="select plugin_name, plugin_status, plugin_library from information_schema.plugins where plugin_name = 'validate_password';"
     vp_plugin=common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True).strip().split('\n')
@@ -140,7 +140,7 @@ def data(args):
     if args['--user']:
         connect_list.append('-u{0}'.format(args['--user']))
     if args['--password']:
-        connect_list.append('-p{0}'.format(args['--password']))
+        connect_list.append('-p\'{0}\''.format(args['--password']))
 
     if not tables:
         if args['--database']:
