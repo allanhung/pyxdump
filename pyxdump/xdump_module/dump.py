@@ -4,7 +4,7 @@
 mysql dump schema
 
 Usage:
-  pyxdump dump schema  [--user USER] [--password PASSWORD] [--database DATABASE] [--exclude_database EXDB] [--output_dir OUTPUTDIR] [--db_per_file] [--create_user]
+  pyxdump dump schema  [--user USER] [--password PASSWORD] [--database DATABASE] [--exclude_database EXDB] [--output_dir OUTPUTDIR] [--db_per_file] [--create_user] [--fix_row_format]
 
 Options:
   --user USER               database login user
@@ -12,6 +12,8 @@ Options:
   --database DATABASE       database list default export all database (example: db1,db2)
   --exclude_database EXDB   database exclude list (example: db3,db4)
   --output_dir OUTPUTDIR    script output dir [default: /tmp]
+  --create_user             generate create user script
+  --fix_row_format          use when import 5.6 to 5.7
   -h --help                 Show this screen.
 """
 
@@ -46,13 +48,15 @@ def schema(args):
     if args['--db_per_file'] or len(db_list) == 1:
         for db in db_list:
             subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt --single-transaction --events --routines --triggers --databases {1} --result-file={2}.sql'.format(' '.join(connect_list),db,os.path.join(args['--output_dir'],db)), shell=True)
-            subprocess.call('sed -i -e "s/ENGINE=InnoDB/ENGINE=InnoDB ROW_FORMAT={0}/g" {1}.sql'.format(row_format,os.path.join(args['--output_dir'],db)),shell=True)
+            if args['--fix_row_format']:
+                subprocess.call('sed -i -e "s/ENGINE=InnoDB/ENGINE=InnoDB ROW_FORMAT={0}/g" {1}.sql'.format(row_format,os.path.join(args['--output_dir'],db)),shell=True)
             print('Output File: {0}.sql'.format(os.path.join(args['--output_dir'],db)))
             if args['--create_user']:
                 subprocess.call('pt-show-grants {0} >> {1}.sql'.format(' '.join(connect_list),os.path.join(args['--output_dir'],db)), shell=True)
     else:
         subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt --single-transaction --events --routines --triggers --databases {1} --result-file={2}.sql'.format(' '.join(connect_list),' '.join(db_list),os.path.join(args['--output_dir'],'alldb')), shell=True)
-        subprocess.call('sed -i -e "s/ENGINE=InnoDB/ENGINE=InnoDB ROW_FORMAT={0}/g" {1}.sql'.format(row_format,os.path.join(args['--output_dir'],'alldb')),shell=True)
+        if args['--fix_row_format']:
+            subprocess.call('sed -i -e "s/ENGINE=InnoDB/ENGINE=InnoDB ROW_FORMAT={0}/g" {1}.sql'.format(row_format,os.path.join(args['--output_dir'],'alldb')),shell=True)
         if args['--create_user']:
             subprocess.call('pt-show-grants {0} >> {1}.sql'.format(' '.join(connect_list),os.path.join(args['--output_dir'],'alldb')), shell=True)
         print('Output File: {0}.sql'.format(os.path.join(args['--output_dir'],'alldb')))
