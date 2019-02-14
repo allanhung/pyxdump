@@ -21,7 +21,7 @@ import subprocess
 import os
 import common
 
-def schema(args):
+def table(args):
     tables=args['--table_list'].replace('.','\t').split(',') if args['--table_list'] else []
     exclude_list = ['mysql' ,'information_schema', 'performance_schema', 'sys']
     if args['--exclude_database']:
@@ -48,8 +48,8 @@ def schema(args):
     data_dir = common.check_output('mysql {0} --batch --skip-column-names -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True).strip().split('\n')[0].split('\t')[1]
 
     exp_failed_list=[]
-    exp_failed_ist=[]
-    for tb in tb_list:
+    exp_failed_xlist=[]
+    for tb in tables:
         (schema, table) = tb.split('\t')
         subprocess.call('mkdir -p {0}'.format(os.path.join(args['--output_dir'],schema)),shell=True)
         sqlscript="SET SESSION sql_log_bin=0; use {0}; flush tables \`{1}\` for export;\!bash cp {2}/{0}/{1}.cfg {3}/{0}/ && cp {2}/{0}/{1}.ibd {3}/{0}/".format(schema, table, data_dir, args['--output_dir'])
@@ -58,17 +58,17 @@ def schema(args):
         x.wait()
         x_stdout, x_stderr = x.communicate()
         if x.returncode > 0:
-            import_failed_list.append('{0}.{1} export failed! error:\n{2}'.format(schema, table, x_stderr.strip().replace("mysql: [Warning] Using a password on the command line interface can be insecure.\n","")))
-            import_failed_xlist.append('use {0}; flush tables \`{1}\` for export;'.format(schema, table))
+            exp_failed_list.append('{0}.{1} export failed! error:\n{2}'.format(schema, table, x_stderr.strip().replace("mysql: [Warning] Using a password on the command line interface can be insecure.\n","")))
+            exp_failed_xlist.append('use {0}; flush tables \`{1}\` for export;'.format(schema, table))
         else:
             subprocess.call('/bin/rm -f {0}.{{cfg,exp}}'.format(os.path.join(data_dir,schema,table)),shell=True)
     if exp_failed_list:
         print('## import failed ####################')
-        print('\n'.join(import_failed_list))
+        print('\n'.join(exp_failed_list))
         print('## import failed ####################')
-    if import_failed_xlist:
+    if exp_failed_xlist:
         print('run follow command in mysql to test:')
-        print('\n'.join(import_failed_xlist))
+        print('\n'.join(exp_failed_xlist))
     else:
         print('Complete!')
     return None
