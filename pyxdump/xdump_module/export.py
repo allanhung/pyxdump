@@ -4,15 +4,17 @@
 mysql export table
 
 Usage:
-  pyxdump export table  [--user USER] [--password PASSWORD] [--table_list TBLIST] [--database DATABASE] [--exclude_database EXDB] [--output_dir OUTPUTDIR]
+  pyxdump export table  [--user USER] [--password PASSWORD] [--table_list TBLIST] [--database DATABASE] [--exclude_database EXDB] [--output_dir OUTPUTDIR] [--remote REMOTE] [--remote_cmd REMOTECMD]
 
 Options:
   --user USER               database login user
   --password PASSWORD       database login password
   --table_list TBLIST       table list if empty use database parameter (example: tb1,tb2)
-  --database DATABASE       database list default export all database (example: db1,db2)
+  --database DATABASE       database list default export all user database (example: db1,db2)
   --exclude_database EXDB   database exclude list (example: db3,db4)
   --output_dir OUTPUTDIR    script output dir [default: /tmp]
+  --remote REMOTE           send export file to remote (example: root@10.0.0.1)
+  --remote_cmd REMOTECMD    send export file to remote (example: <cmd> -i ~/mykey.pem or sshpass -e <cmd>) [default: sshpass -e <cmd>]
   -h --help                 Show this screen.
 """
 
@@ -22,7 +24,6 @@ import os
 import common
 
 def table(args):
-    tables=args['--table_list'].replace('.','\t').split(',') if args['--table_list'] else []
     exclude_list = ['mysql' ,'information_schema', 'performance_schema', 'sys']
     if args['--exclude_database']:
         exclude_list.extend(args['--exclude_database'])
@@ -51,8 +52,12 @@ def table(args):
     exp_failed_xlist=[]
     for tb in tables:
         (schema, table) = tb.split('\t')
-        subprocess.call('mkdir -p {0}'.format(os.path.join(args['--output_dir'],schema)),shell=True)
-        sqlscript="SET SESSION sql_log_bin=0; use {0}; flush tables \`{1}\` for export;\!bash cp {2}/{0}/{1}.cfg {3}/{0}/ && cp {2}/{0}/{1}.ibd {3}/{0}/".format(schema, table, data_dir, args['--output_dir'])
+        if args['--remote']:
+            subprocess.call('{0} mkdir -p {1}'.format(args['--remote_cmd'].replace('<cmd>','ssh')+' '+args['--remote'],os.path.join(args['--output_dir'],schema)),shell=True)
+            sqlscript="SET SESSION sql_log_bin=0; use {0}; flush tables \`{1}\` for export;\!bash {4} {2}/{0}/{1}.cfg {5}:{3}/{0}/ && {4} {2}/{0}/{1}.ibd {5}:{3}/{0}/".format(schema, table, data_dir, args['--output_dir'], args['--remote_cmd'].replace('<cmd>','scp'), args['--remote'])
+        else:
+            subprocess.call('mkdir -p {0}'.format(os.path.join(args['--output_dir'],schema)),shell=True)
+            sqlscript="SET SESSION sql_log_bin=0; use {0}; flush tables \`{1}\` for export;\!bash cp {2}/{0}/{1}.cfg {3}/{0}/ && cp {2}/{0}/{1}.ibd {3}/{0}/".format(schema, table, data_dir, args['--output_dir'])
         print('running sql script: {0}'.format(sqlscript))
         x = subprocess.Popen('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         x.wait()
