@@ -160,16 +160,16 @@ def data(args):
     subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
     for tb in tables:
         (schema, table) = tb.split('\t')
-        p = subprocess.Popen('ls -l {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table.replace('.','\@002e')),os.path.join(args['--datadir'],schema)),shell=True, stdout=DEVNULL, stderr=DEVNULL)
+        p = subprocess.Popen('ls -l {0}.{{cfg,ibd}}'.format(os.path.join(args['--backupdir'],schema,table.replace('.','\@002e')),os.path.join(args['--datadir'],schema)),shell=True, stdout=DEVNULL, stderr=DEVNULL)
         p.wait()
         if p.returncode == 0:
             sqlscript="SET SESSION sql_log_bin=0; {0} truncate table {1}.\`{2}\`; alter table {1}.\`{2}\` discard tablespace;".format(session_variable, schema, table)
             print('running sql script: {0}'.format(sqlscript))
             subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
             print('copy table data: {0}.{1}'.format(schema, table))
-            subprocess.check_call('/bin/cp -f {0}.{{cfg,ibd,exp}} {1}/'.format(os.path.join(args['--backupdir'],schema,table.replace('.','\@002e')),os.path.join(args['--datadir'],schema)),shell=True)
+            subprocess.check_call('/bin/cp -f {0}.{{cfg,ibd}} {1}/'.format(os.path.join(args['--backupdir'],schema,table.replace('.','\@002e')),os.path.join(args['--datadir'],schema)),shell=True)
             print('change file permission: {0}.{1}'.format(schema, table))
-            subprocess.check_call('chown {0}.{1} {2}.{{cfg,ibd,exp}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table.replace('.','\@002e'))),shell=True)
+            subprocess.check_call('chown {0}.{1} {2}.{{cfg,ibd}}'.format(args['--mysql_os_user'],args['--mysql_os_group'],os.path.join(args['--datadir'],schema,table.replace('.','\@002e'))),shell=True)
             sqlscript="SET SESSION sql_log_bin=0; {0} alter table {1}.\`{2}\` import tablespace;".format(session_variable, schema, table)
             print('running sql script: {0}'.format(sqlscript))
             x = subprocess.Popen('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -182,13 +182,13 @@ def data(args):
                 subprocess.call('mysqldump {0} --no-data --set-gtid-purged=OFF --force --quote-names --dump-date --opt -d {1} {2} --result-file=/tmp/{1}.{2}.sql'.format(' '.join(connect_list),schema,table),shell=True)
                 sqlscript="SET SESSION sql_log_bin=0; drop table {0}.\`{1}\`;".format(schema, table)
                 subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
-                subprocess.call('/bin/rm -f {0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--datadir'],schema,table)),shell=True)
+                subprocess.call('/bin/rm -f {0}.{{cfg,ibd}}'.format(os.path.join(args['--datadir'],schema,table)),shell=True)
                 sqlscript="SET SESSION sql_log_bin=0; use {0}; source /tmp/{0}.{1}.sql;".format(schema, table)
                 subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
             else:
                 subprocess.call('/bin/rm -f {0}.{{cfg,exp}}'.format(os.path.join(args['--datadir'],schema,table)),shell=True)
         else:
-            lost_bakfile_list.append('{0}.{{cfg,ibd,exp}}'.format(os.path.join(args['--backupdir'],schema,table)))
+            lost_bakfile_list.append('{0}.{{cfg,ibd}}'.format(os.path.join(args['--backupdir'],schema,table)))
     if args['--pxc']:
         sqlscript="SET global pxc_strict_mode=ENFORCING;"
         subprocess.call('mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript),shell=True)
