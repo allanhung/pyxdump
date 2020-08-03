@@ -25,7 +25,7 @@ Options:
 from docopt import docopt
 import subprocess
 import os
-import common
+from . import common
 
 def schema(args):
     exclude_list = ['mysql' ,'information_schema', 'performance_schema', 'sys']

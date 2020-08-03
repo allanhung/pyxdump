@@ -13,8 +13,8 @@ Options:
 
 from docopt import docopt
 import sys
-import xdump_module
-from xdump_module import *
+from . import xdump_module
+from .xdump_module import *
 
 def main():
     """

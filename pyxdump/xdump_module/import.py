@@ -32,7 +32,7 @@ Options:
 from docopt import docopt
 import subprocess
 import os
-import common
+from . import common
 
 def fix(args):
     tb_list=args['--table_list'].replace('.','\t').split(',')
@@ -47,7 +47,7 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
     connect_list.append('-uroot')
     connect_list.append('-p{0}'.format(tmp_dbpass))
     fix_script=[]
-    if fix_host <> 'localhost':
+    if fix_host != 'localhost':
         fix_script.append('# on source')
         for tb in tb_list:
             (schema, table) = tb.split('\t')
@@ -55,7 +55,7 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
             fix_script.append('sshpass -e scp {0}.{{cfg,ibd}} {1}@{2}:{3}/'.format(os.path.join(args['--backupdir'],schema,table), args['--sshuser'], fix_host, os.path.join(tmp_dir,schema)))
             fix_script.append('sshpass -e scp /tmp/{0}.{1}.sql {2}@{3}:{4}/{0}/{1}.sql'.format(schema, table, args['--sshuser'], fix_host, os.path.join(tmp_dir)))
 
-    if fix_host <> 'localhost':
+    if fix_host != 'localhost':
         fix_script.append('# on {0}'.format(fix_host))
     fix_script.append('docker run -d --name=fix_mysql -e MYSQL_ROOT_PASSWORD={0} -v {1}/data:/var/lib/mysql -v {1}/backup:/dbbackup -v {1}/export:/export mysql:{2}'.format(tmp_dbpass, fix_base_dir, mysql_src_version))
     for tb in tb_list:
@@ -91,7 +91,7 @@ def fix_import(args, tb_list, mysql_src_version, mysql_dst_version, fix_host):
         fix_script.append('docker exec fix_mysql mysql {0} -e "{1}"'.format(' '.join(connect_list),sqlscript))
     fix_script.append('docker stop fix_mysql && docker rm fix_mysql')
 
-    if fix_host <> 'localhost':
+    if fix_host != 'localhost':
         fix_script.append('# on source')
     for tb in tb_list:
         (schema, table) = tb.split('\t')
