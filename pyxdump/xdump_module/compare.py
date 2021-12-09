@@ -22,24 +22,28 @@ from docopt import docopt
 import pymysql
 from colorclass import Color
 from terminaltables import SingleTable
+import tqdm
 
 def getRecordCount(db_connect, schema_name, table_name):
     sqlscript = 'select count(*) from {0}.{1}'.format(schema_name, table_name) 
-    db_connect.execute(sqlscript)
-    data = db_connect.fetchone()
-    return data[0]
+    try:
+        db_connect.execute(sqlscript)
+        data = db_connect.fetchone()
+        return data[0]
+    except Exception as e:
+        return str(e)
 
 def data(args):
     exclude_list = ['information_schema', 'innodb', 'mysql', 'performance_schema', 'sys', 'tmp']
     if args['--exclude_database']:
-        exclude_list.extend(args['--exclude_database'])
+        exclude_list.extend(args['--exclude_database'].split(","))
     exclude_str = ''
     if exclude_list: 
         exclude_str = "'"+"','".join(exclude_list)+"'"
     db_list = []
     tb_list = []
-    srcDb = pymysql.connect(args['--srcHost'], args['--srcUser'], args['--srcPassword'])
-    dstDb = pymysql.connect(args['--dstHost'], args['--dstUser'], args['--dstPassword'])
+    srcDb = pymysql.connect(host=args['--srcHost'], user=args['--srcUser'], password=args['--srcPassword'])
+    dstDb = pymysql.connect(host=args['--dstHost'], user=args['--dstUser'], password=args['--dstPassword'])
     srcCursor = srcDb.cursor()
     dstCursor = dstDb.cursor()
     
@@ -52,7 +56,7 @@ def data(args):
     srcCursor.execute(sqlscript)
     srcData = srcCursor.fetchall()
     table_data = [['table name', args['--srcHost'], args['--dstHost']]]
-    for row in srcData:
+    for row in tqdm(srcData):
         srcCount = getRecordCount(srcCursor, row[0], row[1])
         dstCount = getRecordCount(dstCursor, row[0], row[1])
         if srcCount != dstCount:
