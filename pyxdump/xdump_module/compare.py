@@ -22,7 +22,7 @@ from docopt import docopt
 import pymysql
 from colorclass import Color
 from terminaltables import SingleTable
-import tqdm
+from tqdm import tqdm
 
 def getRecordCount(db_connect, schema_name, table_name):
     sqlscript = 'select count(*) from {0}.{1}'.format(schema_name, table_name) 

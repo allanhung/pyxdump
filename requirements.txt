@@ -1,4 +1,5 @@
 docopt
 colorclass
 terminaltables
+tqdm
 PyMySQL
